@@ -26,3 +26,8 @@ bld/
 
 # manual cmake build ignores
 build/
+archive/
+
+*.bak
+*.swp
+*.swo
