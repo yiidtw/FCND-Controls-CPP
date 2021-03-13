@@ -6,10 +6,10 @@
 1. [PASS] Intro
 2. [PASS] AttitudeControl
 3. [PASS] PositionControl
-4. Nonidealities
-5. TrajectoryFollow
-6. TestManyQuads
-7. TestMavlnk
+4. [PASS] Nonidealities
+5. [PASS] TrajectoryFollow
+6. [PASS] TestManyQuads
+7. [PASS] TestMavlnk
 8. Congratulations!  Your Done!
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/1643/view) Points
@@ -23,11 +23,13 @@
 
 You are reading it! Below I describe how I addressed each rubric point and where in my code each point is handled.
 
+The code snippets for passing each scenario are seperated into different commits. Please use "git log --oneline" to check commit history.
+
 ### Implemented Controller
 
 #### 1. Implemented body rate control in C++. (Scenario 2)
 
-- related parameter
+- Related parameter
 ```
 [QuadControlParams]
 kpPQR = 65, 65, 5
@@ -68,7 +70,7 @@ def body_rate_controller(self,
 
 #### 2. Implement roll pitch control in C++. (Scenario 2)
 
-- related parameter
+- Related parameter
 ```
 [QuadControlParams]
 kpBank = 12
@@ -127,21 +129,25 @@ def roll_pitch_controller(self,
     return p_c, q_c
 ```
 
-#### 3. Implement altitude controller in C++. (Scenario 2)
+#### 3. Implement altitude controller in C++. (Scenario 2, 3, 4)
 
-- related parameter
+- Related parameter
 ```
 [QuadControlParams]
 kpPosZ = 31
 kpVelZ = 10
+KiPosZ = 40
 ```
 
 - C++ implementation
 ```
+integratedAltitudeError += ((posZCmd - posZ) * dt);
+float i_term = KiPosZ * integratedAltitudeError;
+
 float p_term = kpPosZ * (posZCmd - posZ);
 float d_term = velZ + kpVelZ * (velZCmd - velZ);
 
-float u_bar = accelZCmd + p_term + d_term;
+float u_bar = accelZCmd + p_term + i_term + d_term;
 
 float b_z = R(2,2);
 float capAccelZ = CONSTRAIN((u_bar - CONST_GRAVITY) / b_z, - maxAscentRate / dt, maxAscentRate / dt);
@@ -178,9 +184,9 @@ def attitude_controller(self,
     return u_bar_p, u_bar_q, u_bar_r
 ```
 
-#### 4. Implement lateral position control in C++.
+#### 4. Implement lateral position control in C++. (Scenario 3)
 
-- related parameter
+- Related parameter
 ```
 [QuadControlParams]
 kpPosXY = 33
@@ -234,9 +240,9 @@ b_y_c = y_dot_dot_command/c
 return b_x_c, b_y_c
 ```
 
-#### 5. Implement yaw control in C++.
+#### 5. Implement yaw control in C++. (Scenario 3)
 
-- related parameter
+- Related parameter
 ```
 [QuadControlParams]
 kpYaw = 2
@@ -262,7 +268,7 @@ def yaw_controller(self,
 
 #### 6. Implement calculating the motor commands given commanded thrust and moments in C++.  (Scenario 2)
 
-- related parameter
+- Related parameter
 ```
 [QuadControlParams]
 kappa = 0.016
@@ -337,4 +343,6 @@ def set_propeller_angular_velocities(self,
 ### Flight Evaluation
 
 #### Your C++ controller is successfully able to fly the provided test trajectory and visually passes inspection of the scenarios leading up to the test trajectory.
+
+![](https://i.imgur.com/JbXSH3e.png)
 
