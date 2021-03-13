@@ -4,8 +4,8 @@
 
 # Required Scenarios for a Passing Submission:
 1. [PASS] Intro
-2. AttitudeControl
-3. PositionControl
+2. [PASS] AttitudeControl
+3. [PASS] PositionControl
 4. Nonidealities
 5. TrajectoryFollow
 6. TestManyQuads
@@ -27,8 +27,23 @@ You are reading it! Below I describe how I addressed each rubric point and where
 
 #### 1. Implemented body rate control in C++. (Scenario 2)
 
-- Python reference implementation:
+- related parameter
+```
+[QuadControlParams]
+kpPQR = 65, 65, 5
+```
 
+- C++ implementation
+```
+V3F I;
+I.x = Ixx;
+I.y = Iyy;
+I.z = Izz;
+
+momentCmd = kpPQR * I * (pqrCmd - pqr);
+```
+
+- Python reference implementation
 ```
 def body_rate_controller(self,
                         p_c,
@@ -50,17 +65,43 @@ def body_rate_controller(self,
    return u_bar_p, u_bar_q, u_bar_r
 ```
 
-- related parameter
-```
-
-[QuadControlParams]
-kpPQR = 65, 65, 5
-
-```
 
 #### 2. Implement roll pitch control in C++. (Scenario 2)
 
-- Python reference implementation:
+- related parameter
+```
+[QuadControlParams]
+kpBank = 12
+```
+
+- C++ implementation
+```
+if (collThrustCmd > 0) {
+
+    float accel = -collThrustCmd / mass;
+
+    float b_x_c = CONSTRAIN(accelCmd.x / accel, -maxTiltAngle, maxTiltAngle);
+    float b_x = R(0, 2);
+    float b_x_err = b_x_c - b_x;
+    float b_x_p_term = kpBank * b_x_err;
+
+    float b_y_c = CONSTRAIN(accelCmd.y / accel, -maxTiltAngle, maxTiltAngle);
+    float b_y = R(1, 2);
+    float b_y_err = b_y_c - b_y;
+    float b_y_p_term = kpBank * b_y_err;
+
+    pqrCmd.x = (R(1,0) * b_x_p_term - R(0,0) * b_y_p_term) / R(2,2);
+    pqrCmd.y = (R(1,1) * b_x_p_term - R(0,1) * b_y_p_term) / R(2,2);
+
+} else {
+    pqrCmd.x = 0;
+    pqrCmd.y = 0;
+}
+
+pqrCmd.z = 0;
+```
+
+- Python reference implementation
 ```
 def roll_pitch_controller(self,
                           b_x_c,
@@ -86,17 +127,29 @@ def roll_pitch_controller(self,
     return p_c, q_c
 ```
 
-- related parameter
-```
-
-[QuadControlParams]
-kpBank = 12
-
-```
-
 #### 3. Implement altitude controller in C++. (Scenario 2)
 
-- Python reference implementation:
+- related parameter
+```
+[QuadControlParams]
+kpPosZ = 31
+kpVelZ = 10
+```
+
+- C++ implementation
+```
+float p_term = kpPosZ * (posZCmd - posZ);
+float d_term = velZ + kpVelZ * (velZCmd - velZ);
+
+float u_bar = accelZCmd + p_term + d_term;
+
+float b_z = R(2,2);
+float capAccelZ = CONSTRAIN((u_bar - CONST_GRAVITY) / b_z, - maxAscentRate / dt, maxAscentRate / dt);
+
+thrust = - mass * capAccelZ;
+```
+
+- Python reference implementation
 ```
 def attitude_controller(self,
                        b_x_c_target,
@@ -125,22 +178,118 @@ def attitude_controller(self,
     return u_bar_p, u_bar_q, u_bar_r
 ```
 
+#### 4. Implement lateral position control in C++.
+
 - related parameter
 ```
-
 [QuadControlParams]
-kpPosZ = 1
-kpVelZ = 4
-
+kpPosXY = 33
+kpVelXY = 12
 ```
-#### 4. Implement lateral position control in C++.
+
+- C++ implementation
+```
+V3F capVelCmd = velCmd.mag() > maxSpeedXY ? velCmd.norm() * maxSpeedXY : velCmd;
+V3F uncapAccelCmd = accelCmdFF + kpPosXY * (posCmd - pos) + kpVelXY * (capVelCmd - vel);
+
+accelCmd = uncapAccelCmd.mag() > maxAccelXY ? uncapAccelCmd.norm() * maxAccelXY : uncapAccelCmd;
+```
+
+- Python reference implementation
+```
+def lateral_controller(self,
+  x_target,
+  x_dot_target,
+  x_dot_dot_target,
+  x_actual,
+  x_dot_actual,
+  y_target,
+  y_dot_target,
+  y_dot_dot_target,
+  y_actual,
+  y_dot_actual,
+  c):
+
+x_err = x_target - x_actual
+x_err_dot = x_dot_target - x_dot_actual
+
+p_term_x = self.x_k_p * x_err
+d_term_x = self.x_k_d * x_err_dot
+
+x_dot_dot_command = p_term_x + d_term_x + x_dot_dot_target
+
+b_x_c = x_dot_dot_command/c
+
+
+y_err = y_target - y_actual
+y_err_dot = y_dot_target - y_dot_actual
+
+p_term_y = self.y_k_p * y_err
+d_term_y = self.y_k_d * y_err_dot
+
+y_dot_dot_command = p_term_y + d_term_y + y_dot_dot_target
+
+b_y_c = y_dot_dot_command/c
+
+return b_x_c, b_y_c
+```
 
 #### 5. Implement yaw control in C++.
 
+- related parameter
+```
+[QuadControlParams]
+kpYaw = 2
+```
+
+- C++ implementation
+```
+float psi_err = fmodf((yawCmd - yaw), 2.f * F_PI);
+yawRateCmd = kpYaw * psi_err;
+```
+
+- Python reference implementation
+```
+def yaw_controller(self,
+                   psi_target,
+                   psi_actual):
+
+    psi_err = psi_target - psi_actual
+    r_c = self.k_p_yaw * psi_err
+
+    return r_c
+```
+
 #### 6. Implement calculating the motor commands given commanded thrust and moments in C++.  (Scenario 2)
 
-- Python reference implementation:
+- related parameter
+```
+[QuadControlParams]
+kappa = 0.016
+```
 
+- C++ implementation
+```
+float f_t = collThrustCmd;
+
+float l = L / sqrt(2.f);
+float f_x = momentCmd.x / l;
+float f_y = momentCmd.y / l;
+float f_z = -momentCmd.z / kappa;
+
+float f_0, f_1, f_2, f_3;
+f_0 = (f_t + f_x + f_y + f_z) / (4.f);
+f_1 = (f_t - f_x + f_y - f_z) / (4.f);
+f_2 = (f_t + f_x - f_y - f_z) / (4.f);
+f_3 = (f_t - f_x - f_y + f_z) / (4.f);
+
+cmd.desiredThrustsN[0] = f_0;
+cmd.desiredThrustsN[1] = f_1;
+cmd.desiredThrustsN[2] = f_2;
+cmd.desiredThrustsN[3] = f_3;
+```
+
+- Python reference implementation
 ```
 def f_1(self):
     f = self.k_f*self.omega[0]**2
@@ -183,14 +332,6 @@ def set_propeller_angular_velocities(self,
     self.omega[1] = np.sqrt(omega_2)
     self.omega[2] = -np.sqrt(omega_3)
     self.omega[3] = np.sqrt(omega_4)
-```
-
-- related parameter
-```
-
-[QuadControlParams]
-kappa = 0.016
-
 ```
 
 ### Flight Evaluation
